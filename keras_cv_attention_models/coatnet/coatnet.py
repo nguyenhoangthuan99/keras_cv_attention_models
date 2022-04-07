@@ -20,7 +20,7 @@ PRETRAINED_DICT = {"coatnet0": {"imagenet": {160: "4b58c14e1e5e65ce01b1c36c47e1c
 def mhsa_with_multi_head_relative_position_embedding(
     inputs, num_heads=4, key_dim=0, out_shape=None, out_weight=True, out_bias=False, attn_dropout=0, name=None
 ):
-    _, hh, ww, cc = tf.shape(inputs) #inputs.shape
+    _, hh, ww, cc = inputs.shape
     key_dim = key_dim if key_dim > 0 else cc // num_heads
     qk_scale = 1.0 / tf.math.sqrt(tf.cast(key_dim, inputs.dtype))
     out_shape = cc if out_shape is None or not out_weight else out_shape
@@ -32,11 +32,11 @@ def mhsa_with_multi_head_relative_position_embedding(
     qkv = tf.reshape(qkv, [-1, tf.shape(inputs)[1] * tf.shape(inputs)[2], qkv.shape[-1]])
     query, key, value = tf.split(qkv, [qk_out, qk_out, out_shape], axis=-1)
     # query = [batch, num_heads, hh * ww, key_dim]
-    query = tf.transpose(tf.reshape(query, [-1, tf.shape(query)[1], num_heads, key_dim]), [0, 2, 1, 3])
+    query = tf.transpose(tf.reshape(query, [-1, query.shape[1], num_heads, key_dim]), [0, 2, 1, 3])
     # key = [batch, num_heads, key_dim, hh * ww]
-    key = tf.transpose(tf.reshape(key, [-1, tf.shape(key)[1], num_heads, key_dim]), [0, 2, 3, 1])
+    key = tf.transpose(tf.reshape(key, [-1, key.shape[1], num_heads, key_dim]), [0, 2, 3, 1])
     # value = [batch, num_heads, hh * ww, vv_dim]
-    value = tf.transpose(tf.reshape(value, [-1, tf.shape(value)[1], num_heads, vv_dim]), [0, 2, 1, 3])
+    value = tf.transpose(tf.reshape(value, [-1, value.shape[1], num_heads, vv_dim]), [0, 2, 1, 3])
 
     # query *= qk_scale
     # [batch, num_heads, hh * ww, hh * ww]
