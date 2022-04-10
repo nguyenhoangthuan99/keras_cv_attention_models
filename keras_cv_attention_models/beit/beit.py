@@ -42,7 +42,7 @@ class MultiHeadRelativePositionalEmbedding(keras.layers.Layer):
             height = width = int(tf.math.sqrt(float(attn_shape[2] - self.cls_token_len)))  # assume hh == ww, e.g. 14
         else:
             height = self.attn_height
-            width = int(float(tf.math.subtract(attn_shape[2] , self.cls_token_len)) / height)
+            width = int(float(attn_shape[2] - self.cls_token_len) / height)
         num_heads = attn_shape[1] if self.num_heads == -1 else self.num_heads
         num_relative_distance = (2 * height - 1) * (2 * width - 1) + self.cls_token_pos_len
         # pos_shape = (num_relative_distance, num_heads)
