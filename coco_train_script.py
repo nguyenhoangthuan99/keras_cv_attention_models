@@ -36,7 +36,13 @@ def parse_arguments(argv):
     parser.add_argument("-e", "--epochs", type=int, default=-1, help="Total epochs. Set -1 means using lr_decay_steps + lr_cooldown_steps")
     parser.add_argument("-p", "--optimizer", type=str, default="LAMB", help="Optimizer name. One of [AdamW, LAMB, RMSprop, SGD, SGDW].")
     parser.add_argument("-I", "--initial_epoch", type=int, default=0, help="Initial epoch when restore from previous interrupt")
-    parser.add_argument("-s", "--basic_save_name", type=str, default=None, help="Basic save name for model and history. None means a combination of parameters")
+    parser.add_argument(
+        "-s",
+        "--basic_save_name",
+        type=str,
+        default=None,
+        help="Basic save name for model and history. None means a combination of parameters, or starts with _ as a suffix to default name",
+    )
     parser.add_argument(
         "-r", "--restore_path", type=str, default=None, help="Restore model from saved h5 by `keras.models.load_model` directly. Higher priority than model"
     )
@@ -109,11 +115,20 @@ def parse_arguments(argv):
     ds_group.add_argument("--magnitude", type=int, default=6, help="Positional Randaug magnitude value, including rotate / shear / transpose")
     ds_group.add_argument("--num_layers", type=int, default=2, help="Number of randaug applied sequentially to an image. Usually best in [1, 3]")
     ds_group.add_argument(
-        "--random_crop_mode",
-        type=float,
-        default=1.0,
-        help="Random crop mode, 0 for eval mode, (0, 1) for random crop, 1 for random largest crop, > 1 for random scale",
+        "--color_augment_method", type=str, default="random_hsv", help="None positional related augment method, one of [random_hsv, autoaug, randaug]"
     )
+    ds_group.add_argument(
+        "--positional_augment_methods",
+        type=str,
+        default="rts",
+        help="Positional related augment method besides random scale, combine of r: rotate, t: transplate, s: shear, x: scale_x + scale_y",
+    )
+    # ds_group.add_argument(
+    #     "--random_crop_mode",
+    #     type=float,
+    #     default=1.0,
+    #     help="Random crop mode, 0 for eval mode, (0, 1) for random crop, 1 for random largest crop, > 1 for random scale",
+    # )
     ds_group.add_argument("--mosaic_mix_prob", type=float, default=0.5, help="Mosaic mix probability, 0 to disable")
     ds_group.add_argument("--rescale_mode", type=str, default="torch", help="Rescale mode, one of [tf, torch, raw, raw01]")
     ds_group.add_argument("--resize_method", type=str, default="bicubic", help="Resize method from tf.image.resize, like [bilinear, bicubic]")
@@ -127,10 +142,8 @@ def parse_arguments(argv):
         args.num_anchors, args.use_object_scores = 3, True
     else:
         args.num_anchors, args.use_object_scores = 9, False
-        # args.anchor_scale, args.anchor_num_scales, args.anchor_aspect_ratios = 1, 1, [1]
 
     args.additional_det_header_kwargs = json.loads(args.additional_det_header_kwargs) if args.additional_det_header_kwargs else {}
-    # args.num_anchors = len(args.anchor_aspect_ratios) * args.anchor_num_scales
     args.additional_det_header_kwargs.update(  # num_anchors and use_object_scores affecting model architecture, others for prediction only.
         {
             "num_anchors": args.num_anchors,
@@ -147,18 +160,19 @@ def parse_arguments(argv):
         # Cosine decay
         args.lr_decay_steps = int(lr_decay_steps[0].strip())
 
-    basic_save_name = args.basic_save_name
-    if basic_save_name is None and args.restore_path is not None:
+    if args.basic_save_name is None and args.restore_path is not None:
         basic_save_name = os.path.splitext(os.path.basename(args.restore_path))[0]
         basic_save_name = basic_save_name[:-7] if basic_save_name.endswith("_latest") else basic_save_name
-    elif basic_save_name is None:
+        args.basic_save_name = basic_save_name
+    elif args.basic_save_name is None or args.basic_save_name.startswith("_"):
         data_name = args.data_name.replace("/", "_")
         model_name = args.det_header.split(".")[-1] + ("" if args.backbone is None else ("_" + args.backbone.split(".")[-1]))
         anchor_mode = "anchor_free" if args.use_anchor_free_mode else ("yolor_anchor" if args.use_yolor_anchors_mode else "effdet_anchor")
         basic_save_name = "{}_{}_{}_{}_batchsize_{}".format(model_name, args.input_shape, args.optimizer, data_name, args.batch_size)
-        basic_save_name += "_randaug_{}_mosaic_{}_RRC_{}".format(args.magnitude, args.mosaic_mix_prob, args.random_crop_mode)
+        basic_save_name += "_randaug_{}_mosaic_{}".format(args.magnitude, args.mosaic_mix_prob)
+        basic_save_name += "_color_{}_position_{}".format(args.color_augment_method, args.positional_augment_methods)
         basic_save_name += "_lr512_{}_wd_{}_{}".format(args.lr_base_512, args.weight_decay, anchor_mode)
-    args.basic_save_name = basic_save_name
+        args.basic_save_name = basic_save_name if args.basic_save_name is None else (basic_save_name + args.basic_save_name)
     args.enable_float16 = not args.disable_float16
 
     return args
@@ -200,11 +214,12 @@ def run_training_by_args(args):
         # anchor_num_scales=args.anchor_num_scales,
         anchor_scale=args.anchor_scale,
         rescale_mode=args.rescale_mode,
-        random_crop_mode=args.random_crop_mode,
+        # random_crop_mode=args.random_crop_mode,
         mosaic_mix_prob=args.mosaic_mix_prob,
         resize_method=args.resize_method,
         resize_antialias=not args.disable_antialias,
-        use_hsv_augment=True,
+        color_augment_method=args.color_augment_method,
+        positional_augment_methods=args.positional_augment_methods,
         magnitude=args.magnitude,
         num_layers=args.num_layers,
     )
