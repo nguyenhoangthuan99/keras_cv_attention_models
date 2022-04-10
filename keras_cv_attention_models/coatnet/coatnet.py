@@ -220,21 +220,21 @@ def CoAtNetT(input_shape=(224, 224, 3), num_classes=1000, drop_connect_rate=0, c
     num_blocks = [3, 4, 6, 3]
     out_channels = [64, 128, 256, 512]
     stem_width = 64
-    return CoAtNet(**locals(), model_name="coatnett",regularizer=regularizer, **kwargs)
+    return CoAtNet(**locals(), model_name="coatnett", **kwargs)
 
 
 def CoAtNet0(input_shape=(224, 224, 3), num_classes=1000, drop_connect_rate=0, classifier_activation="softmax",regularizer=0, pretrained="imagenet", **kwargs):
     num_blocks = [2, 3, 5, 2]
     out_channels = [96, 192, 384, 768]
     stem_width = 64
-    return CoAtNet(**locals(), model_name="coatnet0",regularizer=regularizer, **kwargs)
+    return CoAtNet(**locals(), model_name="coatnet0", **kwargs)
 
 
 def CoAtNet1(input_shape=(224, 224, 3), num_classes=1000, drop_connect_rate=0.3, classifier_activation="softmax",regularizer=0, **kwargs):
     num_blocks = [2, 6, 14, 2]
     out_channels = [96, 192, 384, 768]
     stem_width = 64
-    return CoAtNet(**locals(), model_name="coatnet1",regularizer=regularizer, **kwargs)
+    return CoAtNet(**locals(), model_name="coatnet1", **kwargs)
 
 
 def CoAtNet2(input_shape=(224, 224, 3), num_classes=1000, drop_connect_rate=0.5, classifier_activation="softmax",regularizer=0, **kwargs):
