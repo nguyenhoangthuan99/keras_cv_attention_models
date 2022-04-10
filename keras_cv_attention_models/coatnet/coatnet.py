@@ -75,6 +75,7 @@ def res_MBConv(
     use_dw_strides=True,
     bn_act_first=False,
     activation="gelu",
+    regularizer=0,
     name="",
 ):
     """ x ← Proj(Pool(x)) + Conv (DepthConv (Conv (Norm(x), stride = 2)))) """
