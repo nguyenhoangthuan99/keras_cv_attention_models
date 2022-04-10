@@ -13,12 +13,12 @@ from keras_cv_attention_models.attention_layers import (
     add_pre_post_process,
 )
 from keras_cv_attention_models.download_and_load import reload_model_weights
-
+from tensorflow.keras import regularizers
 PRETRAINED_DICT = {"coatnet0": {"imagenet": {160: "4b58c14e1e5e65ce01b1c36c47e1c87e", 224: "25a7668fe23a74dc88879ecf491d111b"}}}
 
 
 def mhsa_with_multi_head_relative_position_embedding(
-    inputs, num_heads=4, key_dim=0, out_shape=None, out_weight=True, out_bias=False, attn_dropout=0, name=None
+    inputs, num_heads=4, key_dim=0, out_shape=None, out_weight=True, out_bias=False, attn_dropout=0, name=None,regularizer=0
 ):
     _, hh, ww, cc = inputs.shape
     key_dim = key_dim if key_dim > 0 else cc // num_heads
@@ -28,7 +28,9 @@ def mhsa_with_multi_head_relative_position_embedding(
     vv_dim = out_shape // num_heads
 
     # qkv = keras.layers.Dense(emb_dim * 3, use_bias=False, name=name and name + "qkv")(inputs)
-    qkv = conv2d_no_bias(inputs, qk_out * 2 + out_shape, kernel_size=1, name=name and name + "qkv_")
+    qkv = conv2d_no_bias(inputs, qk_out * 2 + out_shape, kernel_size=1, name=name and name + "qkv_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     qkv = tf.reshape(qkv, [-1, tf.shape(inputs)[1] * tf.shape(inputs)[2], qkv.shape[-1]])
     xx =  tf.shape(inputs)[1] * tf.shape(inputs)[2]
     query, key, value = tf.split(qkv, [qk_out, qk_out, out_shape], axis=-1)
@@ -56,7 +58,9 @@ def mhsa_with_multi_head_relative_position_embedding(
 
     if out_weight:
         # [batch, hh, ww, num_heads * vv_dim] * [num_heads * vv_dim, out] --> [batch, hh, ww, out]
-        attention_output = keras.layers.Dense(out_shape, use_bias=out_bias, name=name and name + "output")(attention_output)
+        attention_output = keras.layers.Dense(out_shape, use_bias=out_bias, name=name and name + "output",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))(attention_output)
     return attention_output
 
 
@@ -78,7 +82,9 @@ def res_MBConv(
 
     if conv_short_cut:
         shortcut = keras.layers.MaxPool2D(strides, strides=strides, padding="SAME", name=name + "shortcut_pool")(inputs) if strides > 1 else inputs
-        shortcut = conv2d_no_bias(shortcut, output_channel, 1, strides=1, name=name + "shortcut_")
+        shortcut = conv2d_no_bias(shortcut, output_channel, 1, strides=1, name=name + "shortcut_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
         # shortcut = batchnorm_with_activation(shortcut, activation=activation, zero_gamma=False, name=name + "shortcut_")
     else:
         shortcut = inputs
@@ -86,40 +92,52 @@ def res_MBConv(
     # MBConv
     input_channel = inputs.shape[-1]
     conv_strides, dw_strides = (1, strides) if use_dw_strides else (strides, 1)  # May swap stirdes with DW
-    nn = conv2d_no_bias(preact, input_channel * expansion, 1, strides=conv_strides, use_bias=bn_act_first, padding="same", name=name + "expand_")
+    nn = conv2d_no_bias(preact, input_channel * expansion, 1, strides=conv_strides, use_bias=bn_act_first, padding="same", name=name + "expand_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     nn = batchnorm_with_activation(nn, activation=activation, act_first=bn_act_first, name=name + "expand_")
-    nn = depthwise_conv2d_no_bias(nn, 3, strides=dw_strides, use_bias=bn_act_first, padding="same", name=name + "MB_")
+    nn = depthwise_conv2d_no_bias(nn, 3, strides=dw_strides, use_bias=bn_act_first, padding="same", name=name + "MB_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     nn = batchnorm_with_activation(nn, activation=activation, act_first=bn_act_first, zero_gamma=False, name=name + "MB_dw_")
     if se_ratio:
         nn = se_module(nn, se_ratio=se_ratio / expansion, activation=activation, name=name + "se_")
-    nn = conv2d_no_bias(nn, output_channel, 1, strides=1, padding="same", name=name + "MB_pw_")
+    nn = conv2d_no_bias(nn, output_channel, 1, strides=1, padding="same", name=name + "MB_pw_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     # nn = batchnorm_with_activation(nn, activation=None, zero_gamma=True, name=name + "MB_pw_")
     nn = drop_block(nn, drop_rate=drop_rate, name=name)
     return keras.layers.Add(name=name + "output")([shortcut, nn])
 
 
-def res_ffn(inputs, expansion=4, kernel_size=1, drop_rate=0, activation="gelu", name=""):
+def res_ffn(inputs, expansion=4, kernel_size=1, drop_rate=0, activation="gelu", name="",regularizer=0):
     """ x ← x + Module (Norm(x)), similar with typical MLP block """
     # preact = batchnorm_with_activation(inputs, activation=None, zero_gamma=False, name=name + "preact_")
     preact = layer_norm(inputs, name=name + "preact_")
 
     input_channel = inputs.shape[-1]
-    nn = conv2d_no_bias(preact, input_channel * expansion, kernel_size, name=name + "1_")
+    nn = conv2d_no_bias(preact, input_channel * expansion, kernel_size, name=name + "1_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     nn = activation_by_name(nn, activation=activation, name=name)
-    nn = conv2d_no_bias(nn, input_channel, kernel_size, name=name + "2_")
+    nn = conv2d_no_bias(nn, input_channel, kernel_size, name=name + "2_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     nn = drop_block(nn, drop_rate=drop_rate, name=name)
     # return keras.layers.Add(name=name + "output")([preact, nn])
     return keras.layers.Add(name=name + "output")([inputs, nn])
 
 
-def res_mhsa(inputs, output_channel, conv_short_cut=True, strides=1, head_dimension=32, drop_rate=0, activation="gelu", name=""):
+def res_mhsa(inputs, output_channel, conv_short_cut=True, strides=1, head_dimension=32, drop_rate=0, activation="gelu", name="",regularizer=0):
     """ x ← Proj(Pool(x)) + Attention (Pool(Norm(x))) """
     # preact = batchnorm_with_activation(inputs, activation=None, zero_gamma=False, name=name + "preact_")
     preact = layer_norm(inputs, name=name + "preact_")
 
     if conv_short_cut:
         shortcut = keras.layers.MaxPool2D(strides, strides=strides, padding="SAME", name=name + "shortcut_pool")(inputs) if strides > 1 else inputs
-        shortcut = conv2d_no_bias(shortcut, output_channel, 1, strides=1, name=name + "shortcut_")
+        shortcut = conv2d_no_bias(shortcut, output_channel, 1, strides=1, name=name + "shortcut_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
         # shortcut = batchnorm_with_activation(shortcut, activation=activation, zero_gamma=False, name=name + "shortcut_")
     else:
         shortcut = inputs
@@ -154,14 +172,19 @@ def CoAtNet(
     dropout=0,
     pretrained=None,
     model_name="coatnet",
+    regularizer=0,
     kwargs=None,
 ):
     inputs = keras.layers.Input(input_shape)
 
     """ stage 0, Stem_stage """
-    nn = conv2d_no_bias(inputs, stem_width, 3, strides=2, use_bias=bn_act_first, padding="same", name="stem_1_")
+    nn = conv2d_no_bias(inputs, stem_width, 3, strides=2, use_bias=bn_act_first, padding="same", name="stem_1_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     nn = batchnorm_with_activation(nn, activation=activation, act_first=bn_act_first, name="stem_1_")
-    nn = conv2d_no_bias(nn, stem_width, 3, strides=1, use_bias=bn_act_first, padding="same", name="stem_2_")
+    nn = conv2d_no_bias(nn, stem_width, 3, strides=1, use_bias=bn_act_first, padding="same", name="stem_2_",kernel_regularizer=regularizers.l2( regularizer),
+    bias_regularizer=regularizers.l2(regularizer),
+    activity_regularizer=regularizers.l2(regularizer))
     # nn = batchnorm_with_activation(nn, activation=activation, name="stem_2_")
 
     """ stage [1, 2, 3, 4] """
@@ -180,11 +203,11 @@ def CoAtNet(
             global_block_id += 1
             if is_conv_block:
                 nn = res_MBConv(
-                    nn, out_channel, conv_short_cut, stride, expansion, block_se_ratio, block_drop_rate, use_dw_strides, bn_act_first, activation, name=name
+                    nn, out_channel, conv_short_cut, stride, expansion, block_se_ratio, block_drop_rate, use_dw_strides, bn_act_first, activation, name=name,regularizer=regularizer
                 )
             else:
-                nn = res_mhsa(nn, out_channel, conv_short_cut, stride, head_dimension, block_drop_rate, activation=activation, name=name)
-                nn = res_ffn(nn, expansion=expansion, drop_rate=block_drop_rate, activation=activation, name=name + "ffn_")
+                nn = res_mhsa(nn, out_channel, conv_short_cut, stride, head_dimension, block_drop_rate, activation=activation, name=name,regularizer=regularizer)
+                nn = res_ffn(nn, expansion=expansion, drop_rate=block_drop_rate, activation=activation, name=name + "ffn_",regularizer=regularizer)
 
     nn = output_block(nn, num_classes=num_classes, drop_rate=dropout, classifier_activation=classifier_activation, act_first=bn_act_first)
     model = keras.models.Model(inputs, nn, name=model_name)

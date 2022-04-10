@@ -215,7 +215,9 @@ def group_norm(inputs, groups=32, epsilon=BATCH_NORM_EPSILON, name=None):
     return GroupNormalization(groups=groups, axis=norm_axis, epsilon=epsilon, name=name and name + "group_norm")(inputs)
 
 
-def conv2d_no_bias(inputs, filters, kernel_size=1, strides=1, padding="VALID", use_bias=False, groups=1, use_torch_padding=True, name=None, **kwargs):
+def conv2d_no_bias(inputs, filters, kernel_size=1, strides=1, padding="VALID", use_bias=False, groups=1, use_torch_padding=True, name=None ,kernel_regularizer=regularizers.l2( 0),
+    bias_regularizer=regularizers.l2(0),
+    activity_regularizer=regularizers.l2(0),**kwargs):
     """ Typical Conv2D with `use_bias` default as `False` and fixed padding """
     pad = (kernel_size[0] // 2, kernel_size[1] // 2) if isinstance(kernel_size, (list, tuple)) else (kernel_size // 2, kernel_size // 2)
     if use_torch_padding and padding.upper() == "SAME" and max(pad) != 0:
@@ -232,11 +234,16 @@ def conv2d_no_bias(inputs, filters, kernel_size=1, strides=1, padding="VALID", u
         groups=groups,
         kernel_initializer=CONV_KERNEL_INITIALIZER,
         name=name and name + "conv",
+        kernel_regularizer=kernel_regularizer,
+    bias_regularizer=bias_regularizer,
+    activity_regularizer=activity_regularizer,
         **kwargs,
     )(inputs)
 
 
-def depthwise_conv2d_no_bias(inputs, kernel_size, strides=1, padding="VALID", use_bias=False, use_torch_padding=True, name=None, **kwargs):
+def depthwise_conv2d_no_bias(inputs, kernel_size, strides=1, padding="VALID", use_bias=False, use_torch_padding=True, name=None,kernel_regularizer=regularizers.l2( 0),
+    bias_regularizer=regularizers.l2(0),
+    activity_regularizer=regularizers.l2(0), **kwargs):
     """ Typical DepthwiseConv2D with `use_bias` default as `False` and fixed padding """
     pad = (kernel_size[0] // 2, kernel_size[1] // 2) if isinstance(kernel_size, (list, tuple)) else (kernel_size // 2, kernel_size // 2)
     if use_torch_padding and padding.upper() == "SAME" and max(pad) != 0:
@@ -249,6 +256,9 @@ def depthwise_conv2d_no_bias(inputs, kernel_size, strides=1, padding="VALID", us
         use_bias=use_bias,
         kernel_initializer=CONV_KERNEL_INITIALIZER,
         name=name and name + "dw_conv",
+        kernel_regularizer=kernel_regularizer,
+        bias_regularizer=bias_regularizer,
+        activity_regularizer=activity_regularizer,
         **kwargs,
     )(inputs)
 
