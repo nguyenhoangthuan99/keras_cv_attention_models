@@ -8,7 +8,7 @@ TF_BATCH_NORM_EPSILON = 0.001
 LAYER_NORM_EPSILON = 1e-5
 CONV_KERNEL_INITIALIZER = keras.initializers.VarianceScaling(scale=2.0, mode="fan_out", distribution="truncated_normal")
 # CONV_KERNEL_INITIALIZER = 'glorot_uniform'
-
+from tensorflow.keras import regularizers
 
 """ Wrapper for default parameters """
 
